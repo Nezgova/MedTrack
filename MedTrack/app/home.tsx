@@ -1,140 +1,226 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CircularProgress from 'react-native-circular-progress-indicator';
 
 type Medicine = {
   name: string;
   amount: string;
-  times: string[]; // Array of times for each dose
-  completed: number; // Number of doses completed
+  times: string[];
+  completed: number;
 };
 
 export default function HomeScreen() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [profileName, setProfileName] = useState(''); // Store the user's name
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch data from AsyncStorage
   useEffect(() => {
-    const fetchMedicines = async () => {
+    const fetchData = async () => {
       try {
-        const storedData = await AsyncStorage.getItem('medicines');
-        const data = storedData ? JSON.parse(storedData) : [];
-        console.log('Fetched data:', data); // Debug the data
-
-        // Ensure data is valid
-        if (Array.isArray(data)) {
+        // Fetch medicines
+        const storedMedicines = await AsyncStorage.getItem('medicines');
+        const medicinesData = storedMedicines ? JSON.parse(storedMedicines) : [];
+        if (Array.isArray(medicinesData)) {
           setMedicines(
-            data.map((med) => ({
+            medicinesData.map((med) => ({
               ...med,
-              times: Array.isArray(med.times) ? med.times : [], // Ensure `times` is an array
-              completed: med.completed || 0, // Initialize `completed` if missing
+              times: Array.isArray(med.times) ? med.times : [],
+              completed: med.completed || 0,
             }))
           );
-        } else {
-          setMedicines([]); // Fallback to empty array
+        }
+
+        // Fetch profile name
+        const storedProfile = await AsyncStorage.getItem('profile');
+        if (storedProfile) {
+          const { name } = JSON.parse(storedProfile);
+          setProfileName(name || ''); // Set the name if available
+        }
+
+        // Check and reset medicines if a new day starts
+        const lastResetDate = await AsyncStorage.getItem('lastResetDate');
+        const today = new Date().toISOString().split('T')[0];
+        if (lastResetDate !== today) {
+          resetDailyMedicines();
+          await AsyncStorage.setItem('lastResetDate', today);
         }
       } catch (error) {
-        console.error('Error fetching medicines:', error);
-        setMedicines([]); // Fallback to empty array on error
+        console.error('Error fetching data:', error);
       }
     };
 
-    fetchMedicines();
+    fetchData();
   }, []);
 
-  // Calculate total doses and completed doses
+  // Reset daily medicines
+  const resetDailyMedicines = async () => {
+    const updatedMedicines = medicines.map((med) => ({
+      ...med,
+      completed: 0,
+    }));
+    setMedicines(updatedMedicines);
+    await AsyncStorage.setItem('medicines', JSON.stringify(updatedMedicines));
+  };
+
+  const handleMarkAsTaken = async (medicine: Medicine) => {
+    const updatedMedicines = medicines.map((med) =>
+      med.name === medicine.name
+        ? { ...med, completed: Math.min(med.completed + 1, med.times.length) }
+        : med
+    );
+    setMedicines(updatedMedicines);
+    await AsyncStorage.setItem('medicines', JSON.stringify(updatedMedicines));
+  };
+
   const totalDoses = medicines.reduce((sum, med) => sum + (med.times?.length || 0), 0);
   const completedDoses = medicines.reduce((sum, med) => sum + (med.completed || 0), 0);
   const progress = totalDoses > 0 ? (completedDoses / totalDoses) * 100 : 0;
 
-  // Handle marking a dose as completed
-  const handleCompleteDose = (item: Medicine) => {
-    setMedicines((prev) =>
-      prev.map((med) =>
-        med.name === item.name
-          ? { ...med, completed: Math.min((med.completed || 0) + 1, med.times.length) }
-          : med
-      )
-    );
-  };
+  const filteredMedicines = medicines.filter((med) =>
+    med.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const notCompletedMedicines = filteredMedicines.filter(
+    (med) => med.completed < med.times.length
+  );
+
+  const completedMedicines = filteredMedicines.filter(
+    (med) => med.completed === med.times.length
+  );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Daily Review</Text>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
 
-      {/* Circular Progress Bar */}
-      <View style={styles.progressContainer}>
+      {/* Greeting Section */}
+      <View style={styles.greetingContainer}>
+        <Text style={styles.greetingText}>Hello, {profileName || 'User'}</Text>
+        <Text style={styles.planText}>Your plan for today</Text>
+      </View>
+
+      {/* Daily Progress Card */}
+      <View style={styles.progressCard}>
         <CircularProgress
           value={progress}
-          radius={60}
+          radius={50}
           maxValue={100}
           valueSuffix="%"
           activeStrokeColor="green"
           inActiveStrokeColor="lightgray"
           titleColor="#333"
-          titleStyle={{ fontWeight: 'bold' }}
+          titleStyle={{ fontWeight: 'bold', fontSize: 12 }}
         />
+        <Text style={styles.completedText}>
+          {completedDoses} of {totalDoses} doses completed
+        </Text>
       </View>
 
-      {/* Medicine List */}
+      {/* Daily Review Section */}
+      <Text style={styles.sectionTitle}>Pending Medicines</Text>
       <FlatList
-        data={medicines}
-        keyExtractor={(item, index) => index.toString()}
-        renderItem={({ item }) => {
-          // Validate item
-          if (!item || !item.times || !Array.isArray(item.times)) {
-            return (
-              <View style={styles.medicineItem}>
-                <Text style={styles.errorText}>Invalid medicine data</Text>
-              </View>
-            );
-          }
-
-          return (
-            <View style={styles.medicineItem}>
+        data={notCompletedMedicines}
+        keyExtractor={(item) => item.name}
+        renderItem={({ item }) => (
+          <View style={styles.medicineCard}>
+            <View>
               <Text style={styles.medicineName}>{item.name}</Text>
-              <Text>{item.amount} pills • {item.times.length} doses/day</Text>
-              <Text>{item.completed || 0} of {item.times.length} doses completed</Text>
-              <TouchableOpacity
-                style={styles.completeButton}
-                onPress={() => handleCompleteDose(item)}
-              >
-                <Text style={styles.completeButtonText}>Mark Dose as Taken</Text>
-              </TouchableOpacity>
+              <Text style={styles.medicineDetails}>
+                {item.amount} pills • {item.times.length} doses/day
+              </Text>
             </View>
-          );
-        }}
+            <TouchableOpacity
+              style={styles.takenButton}
+              onPress={() => handleMarkAsTaken(item)}
+            >
+              <Text style={styles.takenButtonText}>Mark as Taken</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      />
+
+      {/* Completed Medicines Section */}
+      <Text style={styles.sectionTitle}>Completed Medicines</Text>
+      <FlatList
+        data={completedMedicines}
+        keyExtractor={(item) => item.name}
+        renderItem={({ item }) => (
+          <View style={styles.medicineCard}>
+            <View>
+              <Text style={styles.medicineName}>{item.name}</Text>
+              <Text style={styles.medicineDetails}>
+                {item.amount} pills • {item.times.length} doses/day
+              </Text>
+              <Text style={styles.completedText}>All doses completed</Text>
+            </View>
+          </View>
+        )}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
-  progressContainer: { alignItems: 'center', marginBottom: 20 },
-  medicineItem: {
-    marginBottom: 20,
-    padding: 15,
+  container: { flex: 1, padding: 20, backgroundColor: '#F7F7F7' },
+  searchContainer: { marginBottom: 20 },
+  searchInput: {
     borderWidth: 1,
     borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 10,
+    backgroundColor: '#fff',
+    fontSize: 16,
+  },
+  greetingContainer: { marginBottom: 20 },
+  greetingText: { fontSize: 24, fontWeight: 'bold', marginBottom: 5 },
+  planText: { fontSize: 16, color: '#555', marginBottom: 10 },
+  progressCard: {
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 15,
     borderRadius: 10,
     backgroundColor: '#fff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.1,
     shadowRadius: 4,
+    elevation: 2,
   },
-  medicineName: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
-  errorText: { color: 'red', fontWeight: 'bold' },
-  completeButton: {
-    marginTop: 10,
-    backgroundColor: 'green',
+  completedText: { fontSize: 14, marginTop: 10, color: '#555' },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
+  medicineCard: {
+    padding: 15,
+    borderRadius: 10,
+    backgroundColor: '#fff',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  medicineName: { fontSize: 16, fontWeight: 'bold' },
+  medicineDetails: { fontSize: 14, color: '#555', marginTop: 5 },
+  takenButton: {
+    backgroundColor: '#22c55e',
     padding: 10,
     borderRadius: 5,
   },
-  completeButtonText: {
-    color: 'white',
-    textAlign: 'center',
-  },
+  takenButtonText: { color: '#fff', fontWeight: 'bold', textAlign: 'center' },
 });
