@@ -7,9 +7,9 @@ export default function Layout() {
     <Tabs>
       {/* Home Tab */}
       <Tabs.Screen
-        name="home"
+        name="index" // This links to `index.tsx` (your Home Page)
         options={{
-          title: "Home",
+          title: "Home", // Set the desired tab label here
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? "home" : "home-outline"} size={size} color={color} />
           ),
@@ -20,20 +20,9 @@ export default function Layout() {
       <Tabs.Screen
         name="add-medicine"
         options={{
-          title: "Add",
+          title: "Add", // Set the tab label here
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? "add-circle" : "add-circle-outline"} size={size} color={color} />
-          ),
-        }}
-      />
-
-      {/* Calendar Tab */}
-      <Tabs.Screen
-        name="calendar"
-        options={{
-          title: "Calendar",
-          tabBarIcon: ({ focused, color, size }) => (
-            <Ionicons name={focused ? "calendar" : "calendar-outline"} size={size} color={color} />
           ),
         }}
       />
@@ -42,7 +31,7 @@ export default function Layout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          title: "Profile", // Set the tab label here
           tabBarIcon: ({ focused, color, size }) => (
             <Ionicons name={focused ? "person" : "person-outline"} size={size} color={color} />
           ),

@@ -47,7 +47,7 @@ export default function AddMedicineScreen() {
       await AsyncStorage.setItem('medicines', JSON.stringify(medicines));
 
       Alert.alert('Success', 'Medicine added successfully!', [
-        { text: 'OK', onPress: () => router.push('/home') },
+        { text: 'OK', onPress: () => router.push('/') },
       ]);
     } catch (error) {
       console.error('Error saving medicine:', error);
